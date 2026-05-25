@@ -1,6 +1,6 @@
 {
   "name": "signet-credentials",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Publish, fetch, parse, and validate Signet credential events on Nostr. Consumer SDK for the Signet credential profile.",
   "type": "module",
   "main": "./dist/index.js",
