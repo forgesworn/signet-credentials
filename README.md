@@ -4,7 +4,7 @@
 
 Consumer SDK for **Signet credentials** on Nostr — publish, fetch, parse, and validate the kind-31000 credential profile used by the [Signet](https://github.com/forgesworn/signet) protocol.
 
-> Status: **0.1.0 skeleton.** API surface scaffolded, bodies pending. Filed against [Signet ecosystem plan](https://github.com/forgesworn/signet/blob/main/docs/ecosystem.md).
+> Status: **0.1.0 — `persona-name` profile shipped.** 26 tests passing. Future profiles (`age-scope`, `professional`, `supersession`) planned. See [`docs/ecosystem.md`](https://github.com/forgesworn/signet/blob/main/docs/ecosystem.md) in the parent Signet repo for the wider lib portfolio.
 
 ## Why a separate lib?
 
@@ -114,7 +114,7 @@ The Signet credential profile uses `['expiration', '<unix>']` per [NIP-40](https
 
 ## Contributing
 
-The skeleton is in place; implementation bodies are marked `TODO(skeleton)`. Pull requests welcome. See [`docs/ecosystem.md`](https://github.com/forgesworn/signet/blob/main/docs/ecosystem.md) in the parent Signet repo for where this lib fits in the broader portfolio.
+The `persona-name` profile is the first shipped. Pull requests welcome for the remaining profiles (`age-scope`, `professional`, `supersession`) and for additional consumer profiles as Signet's credential surface grows. See [`docs/integrations/axenstax-migration.md`](./docs/integrations/axenstax-migration.md) for a worked example of porting a hand-rolled consumer to this lib.
 
 ## Licence
 
