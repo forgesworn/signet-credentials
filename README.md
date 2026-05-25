@@ -10,7 +10,7 @@ Consumer SDK for **Signet credentials** on Nostr — publish, fetch, parse, and 
 
 [`signet-protocol`](https://www.npmjs.com/package/signet-protocol) is the core types + crypto layer. [`signet-login`](https://www.npmjs.com/package/signet-login) is the sign-in SDK. **`signet-credentials`** is the consumer SDK for everything between — fetching a player's handle, building a new persona-name credential, validating an inbound credential before trusting its tag content.
 
-Until now consumers (axenstax, pallasite, relaykeep, dossier, coach-pulse-web) hand-rolled this against raw `nostr-tools`. That meant duplicated relay-fetch code, duplicated Schnorr verify, and at least one [silent fail-open bug](https://github.com/forgesworn/signet-credentials/blob/main/docs/integrations/axenstax-migration.md#the-bug-it-fixes) (reading the wrong tag name for expiry). One lib, one source of truth.
+Without this lib, every consumer rolls the same code: a WebSocket relay subscription, a Schnorr signature check, an `expiration`-tag read, a newest-wins dedup. That duplication is a real bug surface (one observed live: reading the wrong tag name silently treats expired credentials as valid). One lib, one source of truth.
 
 ## Install
 
@@ -179,7 +179,7 @@ The lib **rejects** display names that are whitespace-only (length > 0 but empty
 
 ## Contributing
 
-The `persona-name` profile is the first shipped. Pull requests welcome for the remaining profiles (`age-scope`, `professional`, `supersession`) and for the gaps listed above. See [`docs/integrations/axenstax-migration.md`](./docs/integrations/axenstax-migration.md) for a worked example of porting a hand-rolled consumer to this lib.
+The `persona-name` profile is the first shipped. Pull requests welcome for the remaining profiles (`age-scope`, `professional`, `supersession`) and for the gaps listed above.
 
 ## Licence
 
