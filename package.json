@@ -1,0 +1,74 @@
+{
+  "name": "signet-credentials",
+  "version": "0.1.0",
+  "description": "Publish, fetch, parse, and validate Signet credential events on Nostr. Consumer SDK for the Signet credential profile.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./persona-name": {
+      "types": "./dist/persona-name/index.d.ts",
+      "import": "./dist/persona-name/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "homepage": "https://github.com/forgesworn/signet-credentials",
+  "keywords": [
+    "signet",
+    "nostr",
+    "credential",
+    "identity",
+    "verification",
+    "display-name",
+    "persona",
+    "kind-31000",
+    "nip-va",
+    "typescript"
+  ],
+  "author": "forgesworn",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forgesworn/signet-credentials.git"
+  },
+  "peerDependencies": {
+    "signet-protocol": "^1.8.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "^4.1.0",
+    "eslint": "^10.0.3",
+    "signet-protocol": "^1.8.0",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.57.0",
+    "vitest": "^4.1.0"
+  },
+  "publishConfig": {
+    "provenance": true
+  },
+  "funding": {
+    "type": "lightning",
+    "url": "lightning:thedonkey@strike.me"
+  }
+}

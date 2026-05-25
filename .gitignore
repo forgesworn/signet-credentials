@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.DS_Store
+
+# IDE and local tools
+.idea/
+.playwright-mcp/
+.claude/
