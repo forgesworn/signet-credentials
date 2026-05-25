@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import { verifyEvent, getPublicKey } from 'signet-protocol'
-import { publishPersonaNameCredential } from '../../src/persona-name/publish.js'
+import { buildPersonaNameCredential } from '../../src/persona-name/publish.js'
 import { generatePrivateKeyHex } from '../fixtures.js'
 
 function findTag(tags: string[][], name: string): string | null {
@@ -8,10 +8,10 @@ function findTag(tags: string[][], name: string): string | null {
   return null
 }
 
-describe('publishPersonaNameCredential', () => {
+describe('buildPersonaNameCredential', () => {
   test('returns a kind-31000 event signed by the persona key', async () => {
     const sk = generatePrivateKeyHex()
-    const event = await publishPersonaNameCredential(sk, 'Axolittle')
+    const event = await buildPersonaNameCredential(sk, 'Axolittle', { scope: 'adult' })
 
     expect(event.kind).toBe(31000)
     expect(event.pubkey).toBe(getPublicKey(sk))
@@ -19,13 +19,13 @@ describe('publishPersonaNameCredential', () => {
   })
 
   test('embeds the display-name tag with the provided handle', async () => {
-    const event = await publishPersonaNameCredential(generatePrivateKeyHex(), 'Axolittle')
+    const event = await buildPersonaNameCredential(generatePrivateKeyHex(), 'Axolittle', { scope: 'adult' })
     expect(findTag(event.tags, 'display-name')).toBe('Axolittle')
   })
 
   test('defaults the expiration tag to 365 days from now (NIP-40)', async () => {
     const before = Math.floor(Date.now() / 1000)
-    const event = await publishPersonaNameCredential(generatePrivateKeyHex(), 'Axolittle')
+    const event = await buildPersonaNameCredential(generatePrivateKeyHex(), 'Axolittle', { scope: 'adult' })
     const after = Math.floor(Date.now() / 1000)
 
     const expirationStr = findTag(event.tags, 'expiration')
@@ -38,10 +38,10 @@ describe('publishPersonaNameCredential', () => {
 
   test('honours the expirySeconds option', async () => {
     const before = Math.floor(Date.now() / 1000)
-    const event = await publishPersonaNameCredential(
+    const event = await buildPersonaNameCredential(
       generatePrivateKeyHex(),
       'Axolittle',
-      { expirySeconds: 60 },
+      { scope: 'adult', expirySeconds: 60 },
     )
     const after = Math.floor(Date.now() / 1000)
     const expiresAt = parseInt(findTag(event.tags, 'expiration')!, 10)
@@ -51,22 +51,31 @@ describe('publishPersonaNameCredential', () => {
 
   test('adds the supersedes tag when supersedesId is provided', async () => {
     const prevId = 'a'.repeat(64)
-    const event = await publishPersonaNameCredential(
+    const event = await buildPersonaNameCredential(
       generatePrivateKeyHex(),
       'Axolittle',
-      { supersedesId: prevId },
+      { scope: 'adult', supersedesId: prevId },
     )
     expect(findTag(event.tags, 'supersedes')).toBe(prevId)
   })
 
   test('omits the supersedes tag when no supersedesId is provided', async () => {
-    const event = await publishPersonaNameCredential(generatePrivateKeyHex(), 'Axolittle')
+    const event = await buildPersonaNameCredential(generatePrivateKeyHex(), 'Axolittle', { scope: 'adult' })
     expect(findTag(event.tags, 'supersedes')).toBeNull()
   })
 
   test('emits "expiration", never the deprecated "expires" tag', async () => {
-    const event = await publishPersonaNameCredential(generatePrivateKeyHex(), 'Axolittle')
+    const event = await buildPersonaNameCredential(generatePrivateKeyHex(), 'Axolittle', { scope: 'adult' })
     expect(event.tags.some((t) => t[0] === 'expires')).toBe(false)
     expect(event.tags.some((t) => t[0] === 'expiration')).toBe(true)
+  })
+
+  test('writes the scope tag from opts, not a hardcoded value', async () => {
+    const event = await buildPersonaNameCredential(
+      generatePrivateKeyHex(),
+      'Axolittle',
+      { scope: 'adult+child' },
+    )
+    expect(findTag(event.tags, 'scope')).toBe('adult+child')
   })
 })

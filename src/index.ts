@@ -13,15 +13,17 @@
  */
 
 export {
-  publishPersonaNameCredential,
+  buildPersonaNameCredential,
   fetchPersonaHandle,
   parsePersonaName,
+  parseValidPersonaName,
   validatePersonaCredential,
 } from './persona-name/index.js'
 
 export type {
   PersonaName,
-  PersonaNameCredentialOptions,
+  PersonaNameScope,
+  BuildPersonaNameCredentialOptions,
   FetchPersonaHandleOptions,
-  PersonaHandleResult,
+  FetchPersonaHandleResult,
 } from './persona-name/index.js'

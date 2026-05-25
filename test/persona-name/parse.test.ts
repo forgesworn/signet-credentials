@@ -57,12 +57,12 @@ describe('parsePersonaName', () => {
     expect(parsePersonaName(fixture.event)!.supersedes).toBe('a'.repeat(64))
   })
 
-  test('clamps the handle to 100 characters defensively', async () => {
+  test('preserves the raw display-name without truncation (validation rejects over-length)', async () => {
     const huge = 'x'.repeat(500)
     const fixture = await makePersonaNameCredential({ displayName: huge })
     const parsed = parsePersonaName(fixture.event)
-    expect(parsed!.displayName).toHaveLength(100)
-    expect(parsed!.displayName).toBe('x'.repeat(100))
+    expect(parsed!.displayName).toHaveLength(500)
+    expect(parsed!.displayName).toBe(huge)
   })
 
   test('returns null expiresAt when there is no expiration tag', async () => {

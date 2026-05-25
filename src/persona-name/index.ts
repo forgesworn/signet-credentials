@@ -1,11 +1,12 @@
-export { publishPersonaNameCredential } from './publish.js'
+export { buildPersonaNameCredential } from './publish.js'
 export { fetchPersonaHandle } from './fetch.js'
-export { parsePersonaName } from './parse.js'
+export { parsePersonaName, parseValidPersonaName } from './parse.js'
 export { validatePersonaCredential } from './validate.js'
 
 export type {
   PersonaName,
-  PersonaNameCredentialOptions,
+  PersonaNameScope,
+  BuildPersonaNameCredentialOptions,
   FetchPersonaHandleOptions,
-  PersonaHandleResult,
+  FetchPersonaHandleResult,
 } from './types.js'

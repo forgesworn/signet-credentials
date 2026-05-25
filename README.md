@@ -4,13 +4,13 @@
 
 Consumer SDK for **Signet credentials** on Nostr — publish, fetch, parse, and validate the kind-31000 credential profile used by the [Signet](https://github.com/forgesworn/signet) protocol.
 
-> Status: **0.1.0 — `persona-name` profile shipped.** 26 tests passing. Future profiles (`age-scope`, `professional`, `supersession`) planned. See [`docs/ecosystem.md`](https://github.com/forgesworn/signet/blob/main/docs/ecosystem.md) in the parent Signet repo for the wider lib portfolio.
+> Status: **0.x — `persona-name` profile shipped.** API may shift before 1.0. 40 tests passing. Future profiles (`age-scope`, `professional`, `supersession`) planned. See [`docs/ecosystem.md`](https://github.com/forgesworn/signet/blob/main/docs/ecosystem.md) in the parent Signet repo for the wider lib portfolio.
 
 ## Why a separate lib?
 
-[`signet-protocol`](https://www.npmjs.com/package/signet-protocol) is the core types + crypto layer. [`signet-login`](https://www.npmjs.com/package/signet-login) is the sign-in SDK. **`signet-credentials`** is the consumer SDK for everything between — fetching a player's handle, publishing a new persona-name credential, validating an inbound credential before trusting its tag content.
+[`signet-protocol`](https://www.npmjs.com/package/signet-protocol) is the core types + crypto layer. [`signet-login`](https://www.npmjs.com/package/signet-login) is the sign-in SDK. **`signet-credentials`** is the consumer SDK for everything between — fetching a player's handle, building a new persona-name credential, validating an inbound credential before trusting its tag content.
 
-Until now consumers (axenstax, dossier, coach-pulse-web) hand-rolled this against raw `nostr-tools`. That meant duplicated relay-fetch code, duplicated Schnorr verify, and at least one [silent fail-open bug](https://github.com/forgesworn/signet/blob/main/docs/ecosystem.md#audit-finding) (reading the wrong tag name for expiry). One lib, one source of truth.
+Until now consumers (axenstax, pallasite, relaykeep, dossier, coach-pulse-web) hand-rolled this against raw `nostr-tools`. That meant duplicated relay-fetch code, duplicated Schnorr verify, and at least one [silent fail-open bug](https://github.com/forgesworn/signet-credentials/blob/main/docs/integrations/axenstax-migration.md#the-bug-it-fixes) (reading the wrong tag name for expiry). One lib, one source of truth.
 
 ## Install
 
@@ -22,50 +22,75 @@ npm install signet-credentials signet-protocol
 
 ## Quick start
 
-Fetch the current display name for a Signet pubkey:
+### Fetch a user's display name (primary consumer flow)
 
 ```typescript
 import { fetchPersonaHandle } from 'signet-credentials'
 
 const result = await fetchPersonaHandle('<pubkey-hex>', {
-  relayUrl: 'wss://relay.trotters.cc',
+  relayUrls: ['wss://relay.example.com', 'wss://relay.other.com'],
 })
 
-if (result) {
-  console.log(result.displayName)   // → "Axolittle"
-  console.log(result.expiresAt)     // → 1812345678 (unix seconds)
-  console.log(result.credentialId)  // → event id (for supersession refs)
+switch (result.status) {
+  case 'ok':
+    showHandle(result.credential.displayName)
+    break
+  case 'not-found':
+    showFallback()  // user genuinely has no credential
+    break
+  case 'all-expired':
+    showStaleNotice()
+    break
+  case 'timeout':
+  case 'transport-error':
+    showRetryUI()  // relay unreachable — DON'T render "no name set"
+    break
+  case 'invalid-input':
+  case 'all-invalid':
+    showError()
+    break
 }
 ```
 
-Publish a new display name (after Signet-app sign-in flow):
+Distinguishing these states matters: "no name set" rendered when the relay was actually down is fail-open. The lib makes you switch on `status` so this can't happen by accident.
+
+### Validate an inbound credential in one call
+
+For single-event use (e.g. an inbound multiplayer JoinRequest passthrough), use the fail-closed `parseValidPersonaName`:
 
 ```typescript
-import { publishPersonaNameCredential } from 'signet-credentials'
+import { parseValidPersonaName } from 'signet-credentials'
 
-const event = await publishPersonaNameCredential(personaPrivKey, 'Axolittle', {
-  expirySeconds: 365 * 24 * 60 * 60,
-  supersedesId: previousCredentialEventId,  // optional
+const credential = await parseValidPersonaName(incomingEvent)
+if (credential) {
+  // event is well-formed, signature valid, length OK, has explicit expiration
+  // tag, and is not expired. Trust the displayName.
+  acceptHandle(credential.displayName)
+} else {
+  rejectAuth('invalid or expired display-name credential')
+}
+```
+
+### Build + sign a new credential
+
+```typescript
+import { buildPersonaNameCredential } from 'signet-credentials'
+
+const event = await buildPersonaNameCredential(personaPrivKey, 'Axolittle', {
+  scope: 'adult',              // required — see "scope" note below
+  expirySeconds: 365 * 86_400, // optional, default 365 days
+  supersedesId: prevCredId,    // optional
 })
 
 // Caller publishes `event` to relays via their existing transport.
+// (This function does not publish — it builds and signs.)
 ```
 
-Parse + validate without a relay round-trip (e.g. inbound JoinRequest):
+### Advanced building blocks
 
-```typescript
-import { parsePersonaName, validatePersonaCredential } from 'signet-credentials'
+`parsePersonaName(event)` — pure parse, no validation. Returns the raw `displayName` even if it exceeds the protocol limit; lets you read crypto-untrusted credentials for diagnostic purposes.
 
-const validation = validatePersonaCredential(incomingEvent)
-if (!validation.valid) {
-  reject(validation.errors.join(', '))
-}
-
-const parsed = parsePersonaName(incomingEvent)
-if (parsed && (parsed.expiresAt == null || parsed.expiresAt > nowUnix())) {
-  acceptHandle(parsed.displayName)
-}
-```
+`validatePersonaCredential(event)` — structural + signature check. Returns `{valid, errors[]}`. Use when you want explicit error reporting rather than a fail-closed boolean.
 
 ## API
 
@@ -75,10 +100,24 @@ Subpath import: `signet-credentials/persona-name`. The barrel re-exports everyth
 
 | Function | Purpose |
 |---|---|
-| `publishPersonaNameCredential(privateKey, displayName, opts?)` | Build + sign a self-declared persona-name credential |
-| `fetchPersonaHandle(pubkey, opts?)` | Subscribe to a relay, return the newest valid credential |
-| `parsePersonaName(event)` | Pure parse → `{displayName, expiresAt, supersedes?, ...}` or `null` |
-| `validatePersonaCredential(event)` | Structural + Schnorr signature check |
+| `fetchPersonaHandle(pubkey, opts)` | Query N relays in parallel; return discriminated `FetchPersonaHandleResult` |
+| `parseValidPersonaName(event)` | **Primary fail-closed.** Parse + validate + non-expired check in one |
+| `buildPersonaNameCredential(privateKey, displayName, opts)` | Build + sign (does not publish) |
+| `parsePersonaName(event)` | Pure parse (no validation) — advanced |
+| `validatePersonaCredential(event)` | Structural + Schnorr check — advanced |
+
+### `FetchPersonaHandleResult` (discriminated)
+
+```typescript
+type FetchPersonaHandleResult =
+  | { status: 'ok'; credential: PersonaName }
+  | { status: 'not-found' }
+  | { status: 'all-expired' }
+  | { status: 'all-invalid' }
+  | { status: 'timeout' }
+  | { status: 'invalid-input' }
+  | { status: 'transport-error'; error: unknown }
+```
 
 ### Planned profiles
 
@@ -100,21 +139,47 @@ Adjacent libs (separate scopes, by design):
 
 ## Design notes
 
+### No default relay
+
+`fetchPersonaHandle` requires `relayUrls: string[]` with no default. This lib is profile-agnostic — it shouldn't bake in any one operator's relay. Pick your own, or read NIP-65 outbox relays via your preferred resolver.
+
+### Multi-relay semantics
+
+All relays are queried in parallel. When at least one relay returns a valid non-expired credential, the result is `ok` with the newest across all relays (by `created_at`). When no relay returns a valid credential, the aggregate status picks the most-informative single-relay state (`all-expired` > `all-invalid` > `not-found` > transport failure).
+
+**Limitation:** ordering is a `created_at` heuristic, not a supersession-chain walk. A future minor will add chain-aware selection.
+
+### Why `scope` is required
+
+`signet-protocol`'s credential model (`buildCredentialEvent`) demands a `scope` value (`adult` or `adult+child`). For a display-name credential the scope is semantically meaningless — your name is not an age claim — but the field is required. Rather than hardcoding `adult` (which would lie about every child user's name credential), the lib forces the caller to declare. Future protocol work may split "credential with tier/scope" from "attribute publication" and remove this awkwardness.
+
 ### Bring-your-own transport
 
-`fetchPersonaHandle` accepts a `webSocketFactory` option so this lib works the same in Node (`ws` package), browser (global `WebSocket`), and embedded environments. No transport dependency baked in.
+`webSocketFactory` is an advanced option. The default uses `globalThis.WebSocket`, which works in the browser and in Node 22+. Override only for older Node or for test injection.
 
-### Bring-your-own signer
+### Bring-your-own signer (for now)
 
-`publishPersonaNameCredential` takes a raw hex private key for the v1 surface. A future minor will add an optional `signer` parameter accepting any `SigningBackend` (`signet-protocol`'s NIP-46 / WebAuthn / local interface) so the lib composes cleanly with bunker-mode flows.
+`buildPersonaNameCredential` takes a raw hex private key. A future minor will accept any `SigningBackend` (signet-protocol's NIP-46 / WebAuthn / local interface) so the lib composes cleanly with bunker-mode flows.
 
 ### Tag name compliance
 
 The Signet credential profile uses `['expiration', '<unix>']` per [NIP-40](https://github.com/nostr-protocol/nips/blob/master/40.md). Hand-rolled consumers historically read `['expires', '<unix>']`, which silently treats credentials as never-expiring. This lib gets it right.
 
+### Display-name normalisation policy
+
+The lib **rejects** display names that are whitespace-only (length > 0 but empty after trim) or that exceed 100 characters. It does NOT normalise Unicode form (NFC) or strip control characters from accepted names — that's the consumer's job at the display layer. The raw value is preserved on the parsed credential so consumers can apply their own policy.
+
+## Known gaps (documented; PRs welcome)
+
+- **Supersession-chain walking** — current ordering is `created_at`-only.
+- **NIP-65 outbox model** — `relayUrls` is caller-supplied; no automatic outbox resolution.
+- **`AbortSignal` support** — `fetchPersonaHandle` cannot be cancelled mid-flight.
+- **`SigningBackend` for build/sign** — currently raw hex key only.
+- **Duplicate `display-name` tag handling** — first wins. Document or reject.
+
 ## Contributing
 
-The `persona-name` profile is the first shipped. Pull requests welcome for the remaining profiles (`age-scope`, `professional`, `supersession`) and for additional consumer profiles as Signet's credential surface grows. See [`docs/integrations/axenstax-migration.md`](./docs/integrations/axenstax-migration.md) for a worked example of porting a hand-rolled consumer to this lib.
+The `persona-name` profile is the first shipped. Pull requests welcome for the remaining profiles (`age-scope`, `professional`, `supersession`) and for the gaps listed above. See [`docs/integrations/axenstax-migration.md`](./docs/integrations/axenstax-migration.md) for a worked example of porting a hand-rolled consumer to this lib.
 
 ## Licence
 

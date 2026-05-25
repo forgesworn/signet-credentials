@@ -53,4 +53,24 @@ describe('validatePersonaCredential', () => {
     const result = await validatePersonaCredential(tampered)
     expect(result.valid).toBe(false)
   })
+
+  test('rejects display-name longer than 100 characters', async () => {
+    const fixture = await makePersonaNameCredential({ displayName: 'x'.repeat(500) })
+    const result = await validatePersonaCredential(fixture.event)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => /display-name.*length|length|100/i.test(e))).toBe(true)
+  })
+
+  test('accepts display-name exactly at the 100-character limit', async () => {
+    const fixture = await makePersonaNameCredential({ displayName: 'x'.repeat(100) })
+    const result = await validatePersonaCredential(fixture.event)
+    expect(result.valid).toBe(true)
+  })
+
+  test('rejects whitespace-only display-name (length > 0 but empty after trim)', async () => {
+    const fixture = await makePersonaNameCredential({ displayName: '   ' })
+    const result = await validatePersonaCredential(fixture.event)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => /display-name/i.test(e))).toBe(true)
+  })
 })

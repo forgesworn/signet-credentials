@@ -2,13 +2,14 @@ import { verifyEvent } from 'signet-protocol'
 import type { NostrEvent, ValidationResult } from 'signet-protocol'
 
 const ATTESTATION_KIND = 31000
+const DISPLAY_NAME_MAX_LENGTH = 100
 
 /**
  * Validate a kind-31000 event against the Signet persona-name profile.
  *
  * Structural + cryptographic checks:
  *   - kind === 31000
- *   - `display-name` tag present and non-empty
+ *   - `display-name` tag present, non-empty, ≤100 characters
  *   - signet-protocol's `verifyEvent` passes (recomputes event id AND
  *     verifies the Schnorr signature against the pubkey)
  *
@@ -24,11 +25,15 @@ export async function validatePersonaCredential(
     errors.push(`kind must be ${ATTESTATION_KIND}`)
   }
 
-  const hasDisplayName = event.tags.some(
-    (t) => t[0] === 'display-name' && typeof t[1] === 'string' && t[1].length > 0,
+  const displayNameTag = event.tags.find(
+    (t) => t[0] === 'display-name' && typeof t[1] === 'string',
   )
-  if (!hasDisplayName) {
+  if (!displayNameTag || !displayNameTag[1] || displayNameTag[1].length === 0) {
     errors.push('missing required display-name tag')
+  } else if (displayNameTag[1].length > DISPLAY_NAME_MAX_LENGTH) {
+    errors.push(`display-name length exceeds ${DISPLAY_NAME_MAX_LENGTH} characters`)
+  } else if (displayNameTag[1].trim().length === 0) {
+    errors.push('display-name must not be whitespace-only')
   }
 
   const sigOk = await verifyEvent(event)
