@@ -9,31 +9,34 @@ const DEFAULT_EXPIRY_SECONDS = 365 * 24 * 60 * 60
  *
  * Wraps `buildCredentialEvent` from `signet-protocol` with the Signet-profile
  * `display-name` tag. The credential is emitted as `type: 'self'` with the
- * persona as both subject and signer (self-declaration).
+ * persona as both subject and signer (self-declaration), `expiration` set
+ * per NIP-40, and `supersedes` when an earlier credential id is provided.
  *
  * Caller is responsible for publishing the returned event to relays.
- *
- * @param privateKey  Persona private key (hex).
- * @param displayName Handle to record. Capped at 100 chars by callers per
- *                    Signet's display-name policy.
- * @param opts        Optional expiry override + supersession reference.
- *
- * @returns Signed kind-31000 event ready to publish.
  */
 export async function publishPersonaNameCredential(
   privateKey: string,
   displayName: string,
   opts: PersonaNameCredentialOptions = {},
 ): Promise<NostrEvent> {
-  // TODO(skeleton): port body from signet-app/src/lib/signet.ts
-  //   publishPersonaNameCredential. Wraps buildCredentialEvent + appends
-  //   ['display-name', displayName] tag before signing.
-  void privateKey
-  void displayName
-  void opts
-  void DEFAULT_EXPIRY_SECONDS
-  void buildCredentialEvent
-  void signEvent
-  void getPublicKey
-  throw new Error('not implemented')
+  const pubkey = getPublicKey(privateKey)
+  const expirySeconds = opts.expirySeconds ?? DEFAULT_EXPIRY_SECONDS
+  const expiresAt = Math.floor(Date.now() / 1000) + expirySeconds
+
+  const template = buildCredentialEvent(pubkey, {
+    subjectPubkey: pubkey,
+    tier: 1,
+    type: 'self',
+    scope: 'adult',
+    method: 'self-declaration',
+    expiresAt,
+    supersedes: opts.supersedesId,
+  })
+
+  const withName = {
+    ...template,
+    tags: [...template.tags, ['display-name', displayName]],
+  }
+
+  return signEvent(withName, privateKey)
 }
