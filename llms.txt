@@ -1,0 +1,67 @@
+# signet-credentials
+
+> Consumers that need a player's Signet display name, or need to validate an
+> inbound credential before trusting it, end up re-implementing the same relay
+> subscription, Schnorr check and `expiration`-tag read. signet-credentials is
+> the consumer SDK for the Signet credential profile (kind 31000) on Nostr:
+> publish, fetch, parse and validate credential events in one library.
+
+For developers building on the [Signet](https://github.com/forgesworn/signet)
+protocol who need to read or write kind-31000 credential events without
+hand-rolling relay queries and signature checks. `signet-protocol` is the core
+types and crypto layer; `signet-credentials` is the profile-level consumer
+library built on it.
+
+## Getting Started
+
+```bash
+npm install signet-credentials signet-protocol
+```
+
+```typescript
+import { fetchPersonaHandle } from 'signet-credentials'
+
+const result = await fetchPersonaHandle('<pubkey-hex>', {
+  relayUrls: ['wss://relay.example.com'],
+})
+
+if (result.status === 'ok') {
+  console.log(result.credential.displayName)
+}
+```
+
+## Key Concepts
+
+- **Credential profile**: this package scopes to the `persona-name` profile
+  of the Signet kind-31000 credential (`type: 'self' | 'peer' | 'professional'`).
+  Other profiles (`age-scope`, `professional`, `supersession`) are planned but
+  not yet implemented.
+- **Fail-closed vs fail-open**: `parseValidPersonaName` is fail-closed (returns
+  `null` on any problem); `fetchPersonaHandle` returns a discriminated
+  `FetchPersonaHandleResult` so callers can distinguish "no credential" from
+  "relay unreachable" and avoid rendering a false "no name set".
+- **`expiration` tag**: credentials use NIP-40's `['expiration', '<unix>']`
+  tag; an expired credential is treated as invalid, not as valid-forever.
+- **No default relay**: `relayUrls` is always caller-supplied; the library
+  does not bake in an operator's relay.
+
+## API Surface
+
+Barrel import from `signet-credentials`, or the subpath
+`signet-credentials/persona-name`:
+
+- `fetchPersonaHandle(pubkey, opts)`: query relays in parallel, return a
+  discriminated `FetchPersonaHandleResult`.
+- `parseValidPersonaName(event)`: parse, validate and check expiry in one
+  fail-closed call.
+- `buildPersonaNameCredential(privateKey, displayName, opts)`: build and sign
+  a credential event (does not publish).
+- `parsePersonaName(event)`: pure parse, no validation.
+- `validatePersonaCredential(event)`: structural and Schnorr check, returns
+  `{valid, errors[]}`.
+
+## Optional
+
+- [README](https://github.com/forgesworn/signet-credentials/blob/main/README.md): design notes, known gaps and multi-relay semantics.
+- [CHANGELOG](https://github.com/forgesworn/signet-credentials/blob/main/CHANGELOG.md)
+- [Signet protocol](https://github.com/forgesworn/signet)
