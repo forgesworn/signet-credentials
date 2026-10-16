@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.1 (2026-10-16)
+
+### Bug Fixes
+
+- correct the published docs against the source (#8) (docs)
+
+
+
 ## 1.0.0 (2026-05-25)
 
 ### Breaking Changes
