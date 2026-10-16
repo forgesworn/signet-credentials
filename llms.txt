@@ -4,7 +4,7 @@
 > inbound credential before trusting it, end up re-implementing the same relay
 > subscription, Schnorr check and `expiration`-tag read. signet-credentials is
 > the consumer SDK for the Signet credential profile (kind 31000) on Nostr:
-> publish, fetch, parse and validate credential events in one library.
+> build, fetch, parse and validate credential events in one library.
 
 For developers building on the [Signet](https://github.com/forgesworn/signet)
 protocol who need to read or write kind-31000 credential events without
@@ -59,6 +59,68 @@ Barrel import from `signet-credentials`, or the subpath
 - `parsePersonaName(event)`: pure parse, no validation.
 - `validatePersonaCredential(event)`: structural and Schnorr check, returns
   `{valid, errors[]}`.
+
+### Types and options
+
+`NostrEvent` and `ValidationResult` (`{ valid: boolean; errors: string[] }`)
+come from `signet-protocol`. Only `parsePersonaName` is synchronous.
+
+```typescript
+function fetchPersonaHandle(
+  pubkey: string,
+  opts: FetchPersonaHandleOptions,
+): Promise<FetchPersonaHandleResult>
+
+function parseValidPersonaName(
+  event: NostrEvent,
+  nowUnix?: number,
+): Promise<PersonaName | null>
+
+function buildPersonaNameCredential(
+  privateKey: string,
+  displayName: string,
+  opts: BuildPersonaNameCredentialOptions,
+): Promise<NostrEvent>
+
+function parsePersonaName(event: NostrEvent): PersonaName | null
+
+function validatePersonaCredential(event: NostrEvent): Promise<ValidationResult>
+
+interface PersonaName {
+  pubkey: string              // subject pubkey, hex, 64 chars, lowercase
+  displayName: string         // raw `display-name` tag value, may exceed 100 chars
+  expiresAt: number | null    // unix seconds; null when there is no `expiration` tag
+  supersedes?: string         // id of the credential this one supersedes
+  credentialId: string        // event id (hex)
+  rawEvent: NostrEvent        // the original signed event
+}
+
+type PersonaNameScope = 'adult' | 'adult+child'
+
+interface BuildPersonaNameCredentialOptions {
+  scope: PersonaNameScope     // required
+  expirySeconds?: number      // seconds from now; default 365 * 24 * 60 * 60
+  supersedesId?: string       // id of the persona-name credential being superseded
+}
+
+interface FetchPersonaHandleOptions {
+  relayUrls: string[]         // required, non-empty
+  timeoutMs?: number          // per-relay deadline in ms; default 3000
+  verify?: boolean            // verify signature and event id; default true
+  webSocketFactory?: (url: string) => WebSocket  // default: globalThis.WebSocket
+}
+```
+
+- `fetchPersonaHandle`'s `pubkey` is a 64-character hex string (upper case is
+  lowercased). A bad pubkey or an empty `relayUrls` returns
+  `{ status: 'invalid-input' }`.
+- `privateKey` is a hex string, not a `Uint8Array`. The credential is
+  self-issued: the derived pubkey is both subject and signer.
+- `scope` is required: `'adult'` for an adult user, `'adult+child'` for a child
+  user.
+- `supersedesId` is the event id (64-character hex) of the earlier credential,
+  written to the `supersedes` tag as given and not checked.
+- `nowUnix` is Unix seconds, default the current time.
 
 ## Optional
 

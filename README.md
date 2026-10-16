@@ -2,9 +2,9 @@
 
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/TheCryptoDonkey?logo=githubsponsors&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/TheCryptoDonkey)
 
-Consumer SDK for **Signet credentials** on Nostr — publish, fetch, parse, and validate the kind-31000 credential profile used by the [Signet](https://github.com/forgesworn/signet) protocol.
+Consumer SDK for **Signet credentials** on Nostr: build, fetch, parse, and validate the kind-31000 credential profile used by the [Signet](https://github.com/forgesworn/signet) protocol.
 
-> Status: **0.x — `persona-name` profile shipped.** API may shift before 1.0. 40 tests passing. Future profiles (`age-scope`, `professional`, `supersession`) planned. See [`docs/ecosystem.md`](https://github.com/forgesworn/signet/blob/main/docs/ecosystem.md) in the parent Signet repo for the wider lib portfolio.
+> Status: **1.x, `persona-name` profile shipped.** 40 tests passing. Future profiles (`age-scope`, `professional`, `supersession`) planned. See [`docs/ecosystem.md`](https://github.com/forgesworn/signet/blob/main/docs/ecosystem.md) in the parent Signet repo for the wider lib portfolio.
 
 ## Why a separate lib?
 
@@ -75,11 +75,16 @@ if (credential) {
 
 ```typescript
 import { buildPersonaNameCredential } from 'signet-credentials'
+import type { PersonaNameScope } from 'signet-credentials'
 
+// 'adult' for an adult user, 'adult+child' for a child user.
+const userScope: PersonaNameScope = 'adult'
+
+// personaPrivKey is a hex string (not a Uint8Array).
 const event = await buildPersonaNameCredential(personaPrivKey, 'Axolittle', {
-  scope: 'adult',              // required — see "scope" note below
+  scope: userScope,            // required: 'adult' | 'adult+child', see "Why scope is required"
   expirySeconds: 365 * 86_400, // optional, default 365 days
-  supersedesId: prevCredId,    // optional
+  supersedesId: prevCredId,    // optional, event id of the credential being replaced
 })
 
 // Caller publishes `event` to relays via their existing transport.
@@ -88,9 +93,9 @@ const event = await buildPersonaNameCredential(personaPrivKey, 'Axolittle', {
 
 ### Advanced building blocks
 
-`parsePersonaName(event)` — pure parse, no validation. Returns the raw `displayName` even if it exceeds the protocol limit; lets you read crypto-untrusted credentials for diagnostic purposes.
+`parsePersonaName(event)`: synchronous pure parse, no validation. Returns `PersonaName | null`, with the raw `displayName` even if it exceeds the protocol limit; lets you read crypto-untrusted credentials for diagnostic purposes.
 
-`validatePersonaCredential(event)` — structural + signature check. Returns `{valid, errors[]}`. Use when you want explicit error reporting rather than a fail-closed boolean.
+`validatePersonaCredential(event)`: async structural + signature check. Resolves to `{valid, errors[]}`. Use when you want explicit error reporting rather than a fail-closed `null`.
 
 ## API
 
@@ -105,6 +110,62 @@ Subpath import: `signet-credentials/persona-name`. The barrel re-exports everyth
 | `buildPersonaNameCredential(privateKey, displayName, opts)` | Build + sign (does not publish) |
 | `parsePersonaName(event)` | Pure parse (no validation) — advanced |
 | `validatePersonaCredential(event)` | Structural + Schnorr check — advanced |
+
+### Types and options
+
+`NostrEvent` and `ValidationResult` come from `signet-protocol`; `ValidationResult` is `{ valid: boolean; errors: string[] }`. Only `parsePersonaName` is synchronous.
+
+```typescript
+function fetchPersonaHandle(
+  pubkey: string,
+  opts: FetchPersonaHandleOptions,
+): Promise<FetchPersonaHandleResult>
+
+function parseValidPersonaName(
+  event: NostrEvent,
+  nowUnix?: number,
+): Promise<PersonaName | null>
+
+function buildPersonaNameCredential(
+  privateKey: string,
+  displayName: string,
+  opts: BuildPersonaNameCredentialOptions,
+): Promise<NostrEvent>
+
+function parsePersonaName(event: NostrEvent): PersonaName | null
+
+function validatePersonaCredential(event: NostrEvent): Promise<ValidationResult>
+
+interface PersonaName {
+  pubkey: string              // subject pubkey, hex, 64 chars, lowercase
+  displayName: string         // raw `display-name` tag value, may exceed 100 chars
+  expiresAt: number | null    // unix seconds; null when there is no `expiration` tag
+  supersedes?: string         // id of the credential this one supersedes
+  credentialId: string        // event id (hex)
+  rawEvent: NostrEvent        // the original signed event
+}
+
+type PersonaNameScope = 'adult' | 'adult+child'
+
+interface BuildPersonaNameCredentialOptions {
+  scope: PersonaNameScope     // required
+  expirySeconds?: number      // seconds from now; default 365 * 24 * 60 * 60
+  supersedesId?: string       // id of the persona-name credential being superseded
+}
+
+interface FetchPersonaHandleOptions {
+  relayUrls: string[]         // required, non-empty
+  timeoutMs?: number          // per-relay deadline in ms; default 3000
+  verify?: boolean            // verify signature and event id; default true
+  webSocketFactory?: (url: string) => WebSocket  // default: globalThis.WebSocket
+}
+```
+
+- `pubkey` (for `fetchPersonaHandle`) is a 64-character hex string. Upper case is accepted and lowercased before querying. Anything else, or an empty `relayUrls`, returns `{ status: 'invalid-input' }`.
+- `privateKey` is a hex string. A `Uint8Array` is not accepted. The credential is self-issued: the pubkey derived from this key is both subject and signer.
+- `supersedesId` is the event id (64-character hex, the `credentialId` of the earlier credential). It is written to the `supersedes` tag as given and is not checked.
+- `nowUnix` is Unix seconds and defaults to the current time. It is the clock `parseValidPersonaName` compares `expiresAt` against.
+- `validatePersonaCredential` reports these `errors` strings: `kind must be 31000`, `missing required display-name tag`, `display-name length exceeds 100 characters`, `display-name must not be whitespace-only` and `invalid signature or event id`.
 
 ### `FetchPersonaHandleResult` (discriminated)
 
@@ -124,7 +185,7 @@ type FetchPersonaHandleResult =
 The package is scoped to **the Signet credential profile** — `kind: 31000`, `type: 'self' | 'peer' | 'professional'`, with Signet-specific tags. Each profile lives in its own subdirectory and subpath export:
 
 - **`persona-name`** — display-name credentials ✅ (this release)
-- **`age-scope`** — `scope: 'adult' | 'child'` claims with optional ZKP range proofs (planned)
+- **`age-scope`**: `scope: 'adult' | 'adult+child'` claims with optional ZKP range proofs (planned)
 - **`professional`** — verifier-issued professional tier credentials (planned)
 - **`supersession`** — utilities for tracking + pruning superseded credentials (planned)
 
@@ -151,7 +212,7 @@ All relays are queried in parallel. When at least one relay returns a valid non-
 
 ### Why `scope` is required
 
-`signet-protocol`'s credential model (`buildCredentialEvent`) demands a `scope` value (`adult` or `adult+child`). For a display-name credential the scope is semantically meaningless — your name is not an age claim — but the field is required. Rather than hardcoding `adult` (which would lie about every child user's name credential), the lib forces the caller to declare. Future protocol work may split "credential with tier/scope" from "attribute publication" and remove this awkwardness.
+`signet-protocol`'s credential model (`buildCredentialEvent`) demands a `scope` value, typed here as `PersonaNameScope = 'adult' | 'adult+child'`. Pass `'adult'` for an adult user and `'adult+child'` for a child user (the value `signet-protocol` itself assigns to under-18 subjects). For a display-name credential the scope is semantically meaningless (your name is not an age claim) but the field is required. Rather than hardcoding `adult` (which would lie about every child user's name credential), the lib forces the caller to declare. Future protocol work may split "credential with tier/scope" from "attribute publication" and remove this awkwardness.
 
 ### Bring-your-own transport
 

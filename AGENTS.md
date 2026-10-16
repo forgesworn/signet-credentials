@@ -1,6 +1,6 @@
 # signet-credentials
 
-Consumer SDK for Signet credential events on Nostr: publish, fetch, parse and
+Consumer SDK for Signet credential events on Nostr: build, fetch, parse and
 validate the kind-31000 credential profile used by the
 [Signet](https://github.com/forgesworn/signet) protocol. `signet-protocol` is
 a peer dependency and provides the core types and crypto layer. Only the
